@@ -68,28 +68,44 @@ const state = {
   loading: false,
 };
 
+/* Categorias e pesos reais, extraídos do app original (Segurança 40%, Qualidade 25%,
+   Organização 15%, Limpeza 10%, Gestão 10%) */
 const CATEGORIAS = [
-  { nome: 'Segurança', peso: 25 },
+  { nome: 'Segurança', peso: 40 },
   { nome: 'Qualidade', peso: 25 },
-  { nome: 'Processos', peso: 25 },
   { nome: 'Organização', peso: 15 },
+  { nome: 'Limpeza', peso: 10 },
   { nome: 'Gestão', peso: 10 },
 ];
 
+/* Itens de checklist com os textos reais do app original.
+   Itens marcados com regraCritica: true disparam DESCLASSIFICADO (perda integral do bônus)
+   se marcados como Não Conforme — equivalente à "regra de ouro" (ex: trava-rodas). */
 const CHECKLIST_TEMPLATE = [
-  { categoria: 'Segurança', descricao: 'Dispositivos de trava-rodas utilizados corretamente' },
-  { categoria: 'Segurança', descricao: 'Uso correto de EPIs por todos os colaboradores' },
-  { categoria: 'Segurança', descricao: 'Docas com sinalização e barreiras ativas' },
-  { categoria: 'Qualidade', descricao: 'Paletes sem avarias visíveis nos produtos' },
-  { categoria: 'Qualidade', descricao: 'Conferência de lote e validade realizada' },
-  { categoria: 'Processos', descricao: 'Sequência de carregamento (FIFO) respeitada' },
-  { categoria: 'Processos', descricao: 'Documentação de expedição preenchida corretamente' },
-  { categoria: 'Organização', descricao: 'Área de expedição livre de obstáculos' },
-  { categoria: 'Organização', descricao: 'Materiais de apoio guardados nos locais corretos' },
-  { categoria: 'Gestão', descricao: 'Indicadores do turno atualizados no quadro de gestão à vista' },
+  { categoria: 'Segurança', descricao: 'Dispositivos de trava-rodas utilizados corretamente.', regraCritica: true },
+  { categoria: 'Segurança', descricao: 'Portas das docas fechadas.' },
+  { categoria: 'Qualidade', descricao: 'Ausência de avarias gerais.' },
+  { categoria: 'Qualidade', descricao: 'Ausência de pallets misturados (latas e tampas).' },
+  { categoria: 'Organização', descricao: 'Organização da triagem.' },
+  { categoria: 'Organização', descricao: 'Organização da área de retrabalho.' },
+  { categoria: 'Organização', descricao: 'Organização do armazém.' },
+  { categoria: 'Organização', descricao: 'Ruas identificadas.' },
+  { categoria: 'Limpeza', descricao: 'Limpeza da área externa das docas.' },
+  { categoria: 'Limpeza', descricao: 'Limpeza das empilhadeiras.' },
+  { categoria: 'Limpeza', descricao: 'Limpeza do armazém.' },
+  { categoria: 'Gestão', descricao: 'Cobertura adequada do turno.' },
 ];
 
-const AREAS = ['Expedição', 'Recebimento', 'Armazém', 'Pátio', 'Linha de Produção'];
+/* Regras Eliminatórias (Perda Integral de Bônus) — mesmas 5 categorias do app original */
+const REGRAS_ELIMINATORIAS = [
+  { codigo: 'ACIDENTE', label: 'Acidente de Trabalho', descricao: 'Acidente de trabalho registrado.' },
+  { codigo: 'MANIPULACAO', label: 'Manipulação de Auditoria', descricao: 'Manipulação de auditoria (adulteração de notas ou fotos).' },
+  { codigo: 'OCULTACAO', label: 'Ocultação de Avarias', descricao: 'Ocultação deliberada de avarias / tentativa de ocultar perdas materiais.' },
+  { codigo: 'DESCUMPRIMENTO', label: 'Descumprimento de Normas Críticas de Segurança', descricao: 'Descumprimento deliberado de normas de segurança.' },
+  { codigo: 'INTEGRIDADE', label: 'Desvio de Integridade', descricao: 'Desvio de integridade identificado / falsidade material.' },
+];
+
+const AREAS = ['Expedição', 'Recebimento', 'Área Externa das Docas', 'Área de Retrabalho', 'Área de Triagem de Embalagens', 'Sala de Conferentes'];
 const TURNOS = ['Turno A', 'Turno B', 'Turno C', 'Turno D'];
 
 /* ============================================================
@@ -171,10 +187,15 @@ async function submeterAuditoria(payload){
   });
   const notaGeral = Math.round((notaPonderada/pesoTotal)*100);
 
+  // Regra crítica: item de "regra de ouro" não conforme (ex: trava-rodas) desclassifica o turno
+  const violouRegraCritica = payload.itens.some(i => i.regraCritica && !i.conforme);
+  const desclassificado = violouRegraCritica || !!payload.regraEliminatoria;
+  const status = desclassificado ? 'DESCLASSIFICADO' : 'CONCLUIDA';
+
   const { data: auditoria, error } = await sb.from('auditorias').insert({
     data: payload.data, turno: payload.turno, area: payload.area,
     conferente_id: payload.conferenteId, auditor_id: state.perfil.id,
-    nota_geral: notaGeral, status: 'CONCLUIDA'
+    nota_geral: notaGeral, status
   }).select().single();
   if(error){ alert('Erro ao salvar auditoria: '+error.message); return; }
 
@@ -188,16 +209,26 @@ async function submeterAuditoria(payload){
   for(const nc of naoConformes){
     const codigo = 'AP-' + Date.now() + '-' + Math.floor(Math.random()*900+100);
     await sb.from('nao_conformidades').insert({
-      codigo, auditoria_id: auditoria.id, criticidade: nc.criticidade || 'MEDIA',
+      codigo, auditoria_id: auditoria.id, criticidade: nc.regraCritica ? 'ALTA' : (nc.criticidade || 'MEDIA'),
       local: payload.area, categoria: nc.categoria, descricao: nc.descricao, status: 'PENDENTE'
+    });
+  }
+  if(payload.regraEliminatoria){
+    const regra = REGRAS_ELIMINATORIAS.find(r=>r.codigo===payload.regraEliminatoria);
+    const codigo = 'AP-' + Date.now() + '-' + Math.floor(Math.random()*900+100);
+    await sb.from('nao_conformidades').insert({
+      codigo, auditoria_id: auditoria.id, criticidade: 'ALTA',
+      local: payload.area, categoria: 'Regra Eliminatória', descricao: `${regra.label}: ${regra.descricao}`, status: 'PENDENTE'
     });
   }
 
   const valorBase = 150;
-  const valorFinal = Math.max(0, Math.round(valorBase * (notaGeral/100)));
+  const valorFinal = desclassificado ? 0 : Math.max(0, Math.round(valorBase * (notaGeral/100)));
   await sb.from('bonificacoes').insert({ conferente_id: payload.conferenteId, auditoria_id: auditoria.id, valor: valorFinal, data: payload.data });
 
-  alert(`Auditoria salva! Nota geral: ${notaGeral}%  •  Bonificação: ${fmtMoney(valorFinal)}`);
+  alert(desclassificado
+    ? `⚠️ TURNO DESCLASSIFICADO — Regra Eliminatória/Crítica violada. Bônus integral perdido (${fmtMoney(0)}).`
+    : `Auditoria salva! Nota geral: ${notaGeral}%  •  Bonificação: ${fmtMoney(valorFinal)}`);
   state.route = 'dashboard';
   await loadAll();
 }
@@ -336,7 +367,7 @@ function LoginScreen(){
           <button type="submit" class="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25">Entrar no Sistema</button>
         </form>
         <div class="border-t border-slate-800 pt-6">
-          <span class="text-xs sm:text-sm font-black text-slate-300 uppercase tracking-wider block text-center lg:text-left mb-4">Acesso Rápido (perfis de exemplo)</span>
+          <span class="text-xs sm:text-sm font-black text-slate-300 uppercase tracking-wider block text-center lg:text-left mb-4">Acesso Rápido de Homologação (Perfis)</span>
           <div class="grid grid-cols-2 gap-3">
             <button onclick="quickFill('claudio.gomes@br3r.com')" type="button" class="p-3.5 text-left rounded-xl border text-xs sm:text-sm border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:bg-slate-850 transition-all">
               <span class="font-extrabold text-white text-sm block">SUPERVISOR</span><span class="text-xs font-medium text-slate-300 block mt-1">Cláudio Gomes</span>
@@ -458,8 +489,8 @@ function DashboardScreen(){
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       ${Card(`
-        <h3 class="font-display font-bold text-white text-lg">Índice de Conformidade por Categoria</h3>
-        <p class="text-sm text-slate-400 mt-0.5">Nota média atingida x peso na remuneração</p>
+        <h3 class="font-display font-bold text-white text-lg">Índice de Conformidade por Categoria (Ponderação)</h3>
+        <p class="text-sm text-slate-400 mt-0.5">Pontuação média atingida comparada ao peso na remuneração</p>
         <div class="h-64 mt-4"><canvas id="chartCategoria"></canvas></div>
       `)}
       ${Card(`
@@ -577,7 +608,7 @@ function renderDashboardCharts(){
 function FilterPanel(){
   return Card(`
     <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg><h3 class="font-display font-bold text-white">Painel de Filtros</h3></div>
+      <div class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg><h3 class="font-display font-bold text-white">Painel de Filtros Avançados</h3></div>
       <button onclick="clearFilters()" class="text-xs text-indigo-400 font-semibold hover:text-indigo-300">Limpar Filtros</button>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -614,45 +645,60 @@ function NovaAuditoriaScreen(){
   if(!state._novaAuditoria){
     state._novaAuditoria = {
       data: new Date().toISOString().slice(0,10), turno: TURNOS[0], area: AREAS[0], conferenteId: state.conferentes[0]?.id || '',
+      regraEliminatoria: '',
       itens: CHECKLIST_TEMPLATE.map(i => ({ ...i, conforme: true, criticidade: 'MEDIA' }))
     };
   }
   const f = state._novaAuditoria;
   const byCat = {};
   f.itens.forEach((it,idx)=>{ byCat[it.categoria] = byCat[it.categoria] || []; byCat[it.categoria].push({...it, idx}); });
+  const violouCritica = f.itens.some(i=>i.regraCritica && !i.conforme);
 
   return `
   <div class="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5 fade-in">
-    <h2 class="font-display font-extrabold text-2xl text-white">Nova Auditoria <span class="text-indigo-400">(Checklist 5 min)</span></h2>
+    <h2 class="font-display font-extrabold text-2xl text-white">Formulário de Auditoria de Campo <span class="text-indigo-400">(5-Minutos)</span></h2>
 
     ${Card(`
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label class="text-xs text-slate-400 block mb-1">Data</label><input type="date" value="${f.data}" onchange="updateNovaAuditoria('data', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white"></div>
-        <div><label class="text-xs text-slate-400 block mb-1">Turno</label>
+        <div><label class="text-xs text-slate-400 block mb-1">Data / Hora</label><input type="date" value="${f.data}" onchange="updateNovaAuditoria('data', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+        <div><label class="text-xs text-slate-400 block mb-1">Turno / Turma</label>
           <select onchange="updateNovaAuditoria('turno', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white">${TURNOS.map(t=>`<option ${f.turno===t?'selected':''}>${t}</option>`).join('')}</select>
         </div>
         <div><label class="text-xs text-slate-400 block mb-1">Área Auditada</label>
           <select onchange="updateNovaAuditoria('area', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white">${AREAS.map(a=>`<option ${f.area===a?'selected':''}>${a}</option>`).join('')}</select>
         </div>
-        <div><label class="text-xs text-slate-400 block mb-1">Conferente</label>
+        <div><label class="text-xs text-slate-400 block mb-1">Conferente Sob Auditoria</label>
           <select onchange="updateNovaAuditoria('conferenteId', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white">${state.conferentes.map(c=>`<option value="${c.id}" ${f.conferenteId===c.id?'selected':''}>${c.nome}</option>`).join('')}</select>
         </div>
       </div>
     `)}
 
+    ${Card(`
+      <h3 class="font-display font-bold text-rose-400 mb-1">Regras Eliminatórias <span class="text-xs text-slate-500 font-normal">(Perda Integral de Bônus)</span></h3>
+      <p class="text-sm text-slate-400 mb-3">Marque apenas se ocorreu algo grave no turno. Isso desclassifica o bônus integralmente.</p>
+      <select onchange="updateNovaAuditoria('regraEliminatoria', this.value)" class="w-full bg-slate-850 border border-rose-500/30 rounded-lg px-3 py-2.5 text-sm text-white">
+        <option value="">Nenhuma ocorrência eliminatória</option>
+        ${REGRAS_ELIMINATORIAS.map(r=>`<option value="${r.codigo}" ${f.regraEliminatoria===r.codigo?'selected':''}>${r.label}</option>`).join('')}
+      </select>
+      ${f.regraEliminatoria ? `<div class="mt-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">⚠️ ${REGRAS_ELIMINATORIAS.find(r=>r.codigo===f.regraEliminatoria).descricao}</div>` : ''}
+    `, 'border-rose-900/40')}
+
+    <h3 class="font-display font-bold text-white text-sm uppercase tracking-wider">Lista de Verificação Detalhada e Conformidades</h3>
+
     ${Object.entries(byCat).map(([cat,itens])=>Card(`
       <h3 class="font-display font-bold text-white mb-1">${cat} <span class="text-xs text-slate-500 font-normal">(peso ${CATEGORIAS.find(c=>c.nome===cat).peso}%)</span></h3>
       <div class="space-y-3 mt-3">
         ${itens.map(it=>`
-          <div class="p-3.5 rounded-xl bg-slate-850 border border-slate-800">
+          <div class="p-3.5 rounded-xl bg-slate-850 border ${it.regraCritica ? 'border-amber-500/30' : 'border-slate-800'}">
             <div class="flex items-start justify-between gap-3">
-              <p class="text-sm text-slate-200 flex-1">${it.descricao}</p>
+              <p class="text-sm text-slate-200 flex-1">${it.descricao} ${it.regraCritica ? '<span class="text-amber-400 text-xs font-bold">(regra de ouro)</span>' : ''}</p>
               <div class="flex shrink-0 rounded-lg overflow-hidden border border-slate-700">
                 <button onclick="setItemConforme(${it.idx}, true)" class="px-3 py-1.5 text-xs font-bold ${it.conforme ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'}">CONFORME</button>
-                <button onclick="setItemConforme(${it.idx}, false)" class="px-3 py-1.5 text-xs font-bold ${!it.conforme ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400'}">NÃO CONF.</button>
+                <button onclick="setItemConforme(${it.idx}, false)" class="px-3 py-1.5 text-xs font-bold ${!it.conforme ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400'}">NÃO CONFORME</button>
               </div>
             </div>
-            ${!it.conforme ? `
+            ${!it.conforme && it.regraCritica ? `<div class="mt-2.5 pt-2.5 border-t border-amber-500/20 text-xs text-amber-400 font-bold">⚠️ Violação de regra de ouro — turno será DESCLASSIFICADO</div>` : ''}
+            ${!it.conforme && !it.regraCritica ? `
               <div class="mt-2.5 pt-2.5 border-t border-slate-800">
                 <label class="text-xs text-slate-400 block mb-1">Criticidade do desvio</label>
                 <select onchange="setItemCriticidade(${it.idx}, this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
@@ -663,7 +709,9 @@ function NovaAuditoriaScreen(){
       </div>
     `)).join('')}
 
-    <button onclick="finalizarAuditoria()" class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-600/25">Finalizar e Salvar Auditoria</button>
+    ${(violouCritica || f.regraEliminatoria) ? `<div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-sm font-bold text-center">⚠️ BÔNUS INTEGRAL DESCLASSIFICADO — este turno perderá 100% da bonificação</div>` : ''}
+
+    <button onclick="finalizarAuditoria()" class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-600/25">Finalizar Auditoria</button>
   </div>`;
 }
 function updateNovaAuditoria(key, val){ state._novaAuditoria[key] = val; render(); }
@@ -771,13 +819,14 @@ function HistoricoScreen(){
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead><tr class="text-left text-slate-500 text-xs uppercase border-b border-slate-800">
-            <th class="pb-2 pr-4">Data</th><th class="pb-2 pr-4">Turno</th><th class="pb-2 pr-4">Área</th><th class="pb-2 pr-4">Conferente</th><th class="pb-2">Nota</th>
+            <th class="pb-2 pr-4">Data</th><th class="pb-2 pr-4">Turno</th><th class="pb-2 pr-4">Área</th><th class="pb-2 pr-4">Conferente</th><th class="pb-2 pr-4">Nota</th><th class="pb-2">Status</th>
           </tr></thead>
           <tbody class="divide-y divide-slate-800">
             ${rows.length ? rows.map(a=>{
               const c = state.conferentes.find(c=>c.id===a.conferente_id);
-              return `<tr><td class="py-2.5 pr-4 text-slate-300">${fmtDate(a.data)}</td><td class="py-2.5 pr-4 text-slate-300">${a.turno}</td><td class="py-2.5 pr-4 text-slate-300">${a.area}</td><td class="py-2.5 pr-4 text-white font-medium">${c?.nome||'-'}</td><td class="py-2.5 font-bold ${a.nota_geral>=85?'text-emerald-400':a.nota_geral>=70?'text-amber-400':'text-rose-400'}">${fmtPct(a.nota_geral||0)}</td></tr>`;
-            }).join('') : `<tr><td colspan="5" class="py-8 text-center text-slate-500">Nenhuma auditoria registrada ainda.</td></tr>`}
+              const desclass = a.status === 'DESCLASSIFICADO';
+              return `<tr><td class="py-2.5 pr-4 text-slate-300">${fmtDate(a.data)}</td><td class="py-2.5 pr-4 text-slate-300">${a.turno}</td><td class="py-2.5 pr-4 text-slate-300">${a.area}</td><td class="py-2.5 pr-4 text-white font-medium">${c?.nome||'-'}</td><td class="py-2.5 pr-4 font-bold ${desclass ? 'text-rose-400' : a.nota_geral>=85?'text-emerald-400':a.nota_geral>=70?'text-amber-400':'text-rose-400'}">${fmtPct(a.nota_geral||0)}</td><td class="py-2.5">${desclass ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-[10px] font-bold">DESCLASSIFICADO</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold">CONCLUÍDA</span>'}</td></tr>`;
+            }).join('') : `<tr><td colspan="6" class="py-8 text-center text-slate-500">Nenhuma auditoria registrada ainda.</td></tr>`}
           </tbody>
         </table>
       </div>
