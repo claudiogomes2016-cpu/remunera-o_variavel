@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Auditoria BR3R - Ball & Sodexo</title>
 <meta name="description" content="Sistema de Auditoria de Qualidade e Segurança Industrial BR3R">
+
+<!-- PWA: permite "Instalar como aplicativo" no computador e celular -->
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#4f46e5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Auditoria BR3R">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +26,15 @@
     theme: {
       extend: {
         fontFamily: { sans: ['Inter','ui-sans-serif','sans-serif'], display: ['Outfit','ui-sans-serif','sans-serif'] },
-        colors: { slate: { 850: '#152238', 150: '#ebf0f6' } }
+        colors: {
+          slate: { 850: '#152238', 150: '#ebf0f6' },
+          /* Paleta oficial Ball Corporation substituindo o "indigo" padrão do Tailwind:
+             Blue #1140FE, Charcoal #1A1A1A, Grey #8C8E94 */
+          indigo: {
+            50:'#eef1ff', 100:'#dce3ff', 200:'#b9c8ff', 300:'#8ea3ff', 400:'#5b78ff',
+            500:'#2b4dfe', 600:'#1140FE', 700:'#0d34cc', 800:'#0a2899', 900:'#081d70', 950:'#051247'
+          }
+        }
       }
     }
   }
@@ -53,6 +71,11 @@
   html.light input,html.light select,html.light textarea{ background-color:#ffffff !important; color:#0f172a !important; }
   html.light .hover\:bg-slate-800:hover{ background-color:#f1f5f9 !important; }
   html.light .hover\:bg-slate-850:hover{ background-color:#f8fafc !important; }
+  /* Ajustes finos da sidebar no tema claro: sombra sutil, ícones inativos mais nítidos */
+  html.light aside{ box-shadow: 2px 0 12px rgba(15,23,42,.04) !important; }
+  html.light aside nav button:not([class*="bg-indigo"]){ color:#334155 !important; }
+  html.light aside nav button:not([class*="bg-indigo"]) svg{ color:#64748b !important; }
+  html.light aside nav button:not([class*="bg-indigo"]):hover{ background-color:#f1f5f9 !important; color:#0f172a !important; }
   html.light .shadow-black\/80,html.light .shadow-black\/90{ --tw-shadow-color:rgba(15,23,42,.08) !important; }
 </style>
 </head>
@@ -437,6 +460,10 @@ function Sidebar(){
     </nav>
 
     <div class="px-3 py-4 border-t border-slate-800 space-y-2">
+      ${state._canInstall ? `<button onclick="installApp()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-md shadow-indigo-600/20">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        <span class="font-semibold text-sm">Instalar Aplicativo</span>
+      </button>` : ''}
       ${ThemeToggleButton(false)}
       <button onclick="doLogout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-rose-400 hover:bg-rose-500/10 transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
@@ -1095,6 +1122,15 @@ function toggleTheme(){
   localStorage.setItem('br3r-theme', state.theme);
   render();
 }
+async function installApp(){
+  const promptEvent = window.__deferredInstallPrompt;
+  if(!promptEvent){ alert('Para instalar: no menu do navegador (⋮), procure por "Instalar aplicativo" ou "Adicionar à tela inicial".'); return; }
+  promptEvent.prompt();
+  await promptEvent.userChoice;
+  window.__deferredInstallPrompt = null;
+  state._canInstall = false;
+  render();
+}
 function ThemeToggleButton(compact){
   const isLight = state.theme === 'light';
   const icon = isLight
@@ -1135,6 +1171,17 @@ function render(){
    INICIALIZAÇÃO
    ============================================================ */
 async function init(){
+  window.__deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    window.__deferredInstallPrompt = e;
+    state._canInstall = true;
+    render();
+  });
+  window.addEventListener('appinstalled', () => { state._canInstall = false; render(); });
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
   if(sb){
     const { data } = await sb.auth.getSession();
     if(data.session){
