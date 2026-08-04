@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
 <head>
@@ -1155,19 +1154,169 @@ function HistoricoScreen(){
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead><tr class="text-left text-slate-300 text-xs uppercase border-b border-slate-800">
-            <th class="pb-2 pr-4">Data</th><th class="pb-2 pr-4">Turno</th><th class="pb-2 pr-4">Área</th><th class="pb-2 pr-4">Conferente</th><th class="pb-2 pr-4">Nota</th><th class="pb-2">Status</th>
+            <th class="pb-2 pr-4">Data</th><th class="pb-2 pr-4">Turno</th><th class="pb-2 pr-4">Área</th><th class="pb-2 pr-4">Conferente</th><th class="pb-2 pr-4">Nota</th><th class="pb-2 pr-4">Pontos Perdidos</th><th class="pb-2 pr-4">Status</th><th class="pb-2">Ações</th>
           </tr></thead>
           <tbody class="divide-y divide-slate-800">
             ${rows.length ? rows.map(a=>{
               const c = state.conferentes.find(c=>c.id===a.conferente_id);
               const desclass = a.status === 'DESCLASSIFICADO';
-              return `<tr><td class="py-2.5 pr-4 text-slate-300">${fmtDate(a.data)}</td><td class="py-2.5 pr-4 text-slate-300">Turno ${a.turno}</td><td class="py-2.5 pr-4 text-slate-300">${a.area}</td><td class="py-2.5 pr-4 text-white font-medium">${c?.nome||'-'}</td><td class="py-2.5 pr-4 font-bold ${desclass ? 'text-rose-400' : a.nota_geral>=85?'text-emerald-400':a.nota_geral>=70?'text-amber-400':'text-rose-400'}">${fmtPct(a.nota_geral||0)}</td><td class="py-2.5">${desclass ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-[10px] font-bold">DESCLASSIFICADO</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold">CONCLUÍDA</span>'}</td></tr>`;
-            }).join('') : `<tr><td colspan="6" class="py-8 text-center text-slate-300">Nenhuma auditoria registrada ainda.</td></tr>`}
+              const pontosPerdidos = Math.max(0, 100 - (a.nota_geral||0));
+              return `<tr>
+                <td class="py-2.5 pr-4 text-slate-300">${fmtDate(a.data)}</td>
+                <td class="py-2.5 pr-4 text-slate-300">Turno ${a.turno}</td>
+                <td class="py-2.5 pr-4 text-slate-300">${a.area}</td>
+                <td class="py-2.5 pr-4 text-white font-medium">${c?.nome||'-'}</td>
+                <td class="py-2.5 pr-4 font-bold ${desclass ? 'text-rose-400' : a.nota_geral>=85?'text-emerald-400':a.nota_geral>=70?'text-amber-400':'text-rose-400'}">${fmtPct(a.nota_geral||0)}</td>
+                <td class="py-2.5 pr-4 font-bold text-rose-400">${pontosPerdidos} pts</td>
+                <td class="py-2.5 pr-4">${desclass ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-[10px] font-bold">DESCLASSIFICADO</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold">CONCLUÍDA</span>'}</td>
+                <td class="py-2.5"><div class="flex items-center gap-1.5">
+                  <button onclick="abrirWhatsApp('${a.id}')" title="Enviar para WhatsApp" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/></svg></button>
+                  <button onclick="abrirEdicaoAuditoria('${a.id}')" title="Editar" class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+                  <button onclick="excluirAuditoria('${a.id}')" title="Excluir" class="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></button>
+                </div></td>
+              </tr>`;
+            }).join('') : `<tr><td colspan="8" class="py-8 text-center text-slate-300">Nenhuma auditoria registrada ainda.</td></tr>`}
           </tbody>
         </table>
       </div>
     `)}
+  </div>
+  ${EditarAuditoriaModal()}
+  ${WhatsAppModal()}`;
+}
+
+/* ============================================================
+   EXCLUIR / EDITAR AUDITORIA
+   ============================================================ */
+async function excluirAuditoria(id){
+  if(!confirm('Tem certeza que deseja excluir esta auditoria? Isso também remove as não conformidades e planos de ação ligados a ela.')) return;
+  const ncs = state.ncs.filter(nc=>nc.auditoria_id===id);
+  for(const nc of ncs){ await sb.from('planos_acao').delete().eq('nc_id', nc.id); }
+  await sb.from('nao_conformidades').delete().eq('auditoria_id', id);
+  await sb.from('checklist_itens').delete().eq('auditoria_id', id);
+  await sb.from('bonificacoes').delete().eq('auditoria_id', id);
+  await sb.from('auditorias').delete().eq('id', id);
+  await loadAll();
+}
+function abrirEdicaoAuditoria(id){
+  const a = state.auditorias.find(a=>a.id===id);
+  if(!a) return;
+  state._editAudit = { id: a.id, data: a.data, turno: a.turno, area: a.area, conferente_id: a.conferente_id, nota_geral: a.nota_geral, status: a.status };
+  render();
+}
+function fecharEdicaoAuditoria(){ state._editAudit = null; render(); }
+function updateEditAudit(key, val){ state._editAudit[key] = val; render(); }
+async function salvarEdicaoAuditoria(){
+  const e = state._editAudit;
+  await sb.from('auditorias').update({ data: e.data, turno: e.turno, area: e.area, conferente_id: e.conferente_id, nota_geral: Number(e.nota_geral), status: e.status }).eq('id', e.id);
+  state._editAudit = null;
+  await loadAll();
+}
+function EditarAuditoriaModal(){
+  const e = state._editAudit;
+  if(!e) return '';
+  return `
+  <div class="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md fade-in">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <h3 class="font-display font-bold text-white text-lg">Editar Auditoria</h3>
+      <div class="space-y-3">
+        <div><label class="text-xs text-slate-300 block mb-1">Data</label><input type="date" value="${e.data}" onchange="updateEditAudit('data', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Turno</label><select onchange="updateEditAudit('turno', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${TURNOS.map(t=>`<option value="${t}" ${e.turno===t?'selected':''}>Turno ${t}</option>`).join('')}</select></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Área</label><select onchange="updateEditAudit('area', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${AREAS.map(a=>`<option ${e.area===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Conferente</label><select onchange="updateEditAudit('conferente_id', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${state.conferentes.map(c=>`<option value="${c.id}" ${e.conferente_id===c.id?'selected':''}>${c.nome}</option>`).join('')}</select></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Nota Geral (%)</label><input type="number" min="0" max="100" value="${e.nota_geral}" onchange="updateEditAudit('nota_geral', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Status</label><select onchange="updateEditAudit('status', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"><option value="CONCLUIDA" ${e.status==='CONCLUIDA'?'selected':''}>Concluída</option><option value="DESCLASSIFICADO" ${e.status==='DESCLASSIFICADO'?'selected':''}>Desclassificado</option></select></div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="fecharEdicaoAuditoria()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold">Cancelar</button>
+        <button onclick="salvarEdicaoAuditoria()" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">Salvar</button>
+      </div>
+    </div>
   </div>`;
+}
+
+/* ============================================================
+   EXPORTAR PARA WHATSAPP
+   ============================================================ */
+function abrirWhatsApp(auditoriaId){ state._waAuditId = auditoriaId; render(); }
+function fecharWhatsApp(){ state._waAuditId = null; render(); }
+function montarMensagemWhatsApp(a){
+  const c = state.conferentes.find(c=>c.id===a.conferente_id);
+  const ncs = state.ncs.filter(nc=>nc.auditoria_id===a.id);
+  const pontosPerdidos = Math.max(0, 100 - (a.nota_geral||0));
+  const bonif = state.bonificacoes.find(b=>b.auditoria_id===a.id);
+  let msg = `📋 *RELATÓRIO DE AUDITORIA - BALL BR3R / SODEXO*\n`;
+  msg += `────────────────────────────\n`;
+  msg += `📅 *Data:* ${fmtDate(a.data)}   ⏱️ *Turno:* ${a.turno}${a.horario_turno?` (${a.horario_turno})`:''}\n`;
+  msg += `👷 *Conferente:* ${c?.nome||'-'}\n`;
+  if(a.lider_sodexo) msg += `👔 *Líder Sodexo:* ${a.lider_sodexo}\n`;
+  msg += `📍 *Área:* ${a.area}\n`;
+  msg += `📊 *Nota Final:* ${fmtPct(a.nota_geral||0)}   🔻 *Pontos Perdidos:* ${pontosPerdidos} pts\n`;
+  msg += `💰 *Bônus:* ${fmtMoney(bonif?.valor||0)}${a.status==='DESCLASSIFICADO'?' (DESCLASSIFICADO)':''}\n`;
+  msg += `────────────────────────────\n`;
+  if(ncs.length){
+    msg += `⚠️ *NÃO CONFORMIDADES (${ncs.length}):*\n\n`;
+    ncs.forEach((nc,i)=>{
+      msg += `*${i+1}. [${nc.categoria}]*\n`;
+      msg += `• *Descrição:* ${nc.descricao}\n`;
+      msg += `• *Gravidade:* ${nc.criticidade}\n`;
+      msg += `• *Local:* ${nc.local}\n`;
+      msg += `• *Status:* ${nc.status}\n`;
+      if(nc.fotos && nc.fotos.length) msg += `• 📸 *Fotos:* ${nc.fotos.length} imagem(ns) — baixe abaixo para anexar\n`;
+      msg += `\n`;
+    });
+  } else {
+    msg += `✅ *NENHUMA NÃO CONFORMIDADE! EQUIPE 100% CONFORME!*`;
+  }
+  return msg;
+}
+function WhatsAppModal(){
+  const id = state._waAuditId;
+  if(!id) return '';
+  const a = state.auditorias.find(a=>a.id===id);
+  if(!a) return '';
+  const ncs = state.ncs.filter(nc=>nc.auditoria_id===a.id);
+  const fotos = ncs.flatMap(nc => (nc.fotos||[]).map((f,fi)=>({ f, nc, fi })));
+  const msg = montarMensagemWhatsApp(a);
+  return `
+  <div class="fixed inset-0 z-[75] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto fade-in">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-2xl my-auto shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="bg-emerald-600 px-6 py-4 text-white flex items-center justify-between shrink-0">
+        <div><h3 class="text-lg font-black">Exportar para WhatsApp</h3><p class="text-xs text-emerald-100">${fmtDate(a.data)} • Turno ${a.turno} • ${a.area}</p></div>
+        <button onclick="fecharWhatsApp()" class="p-2 bg-white/10 hover:bg-white/20 rounded-full">✕</button>
+      </div>
+      <div class="p-5 space-y-4 overflow-y-auto flex-1">
+        <div class="flex flex-wrap gap-2">
+          <button onclick="enviarWhatsApp()" class="flex-1 py-3 px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2">📱 Abrir WhatsApp</button>
+          <button onclick="copiarTextoWhatsApp()" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl">📋 Copiar Texto</button>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-200 whitespace-pre-wrap max-h-56 overflow-y-auto" id="waMsgText">${msg}</div>
+        <div>
+          <h4 class="text-sm font-bold text-white mb-2">Fotos para anexar (${fotos.length})</h4>
+          ${fotos.length ? `<div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            ${fotos.map((item,i)=>`
+              <div class="space-y-1">
+                <img src="${item.f}" class="w-full aspect-video object-cover rounded-lg border border-slate-700">
+                <a href="${item.f}" download="Auditoria_${a.id.slice(0,8)}_Foto${i+1}.jpg" class="block text-center text-[10px] py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-md font-bold">Baixar</a>
+              </div>`).join('')}
+          </div>` : `<p class="text-xs text-slate-300">Nenhuma foto registrada nesta auditoria.</p>`}
+        </div>
+      </div>
+      <div class="bg-slate-850 px-6 py-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button onclick="fecharWhatsApp()" class="py-2 px-5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+function enviarWhatsApp(){
+  const a = state.auditorias.find(a=>a.id===state._waAuditId);
+  const msg = montarMensagemWhatsApp(a);
+  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+}
+async function copiarTextoWhatsApp(){
+  const a = state.auditorias.find(a=>a.id===state._waAuditId);
+  const msg = montarMensagemWhatsApp(a);
+  try{ await navigator.clipboard.writeText(msg); alert('Texto copiado!'); }catch(e){ alert('Não foi possível copiar automaticamente — selecione o texto manualmente.'); }
 }
 
 /* ============================================================
