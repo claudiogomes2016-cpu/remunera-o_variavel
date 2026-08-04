@@ -585,8 +585,13 @@ function DashboardScreen(){
   const bonifFiltradas = state.bonificacoes.filter(b => auditoriaIds.has(b.auditoria_id));
   const totalBonif = bonifFiltradas.reduce((s,b)=>s+Number(b.valor||0),0);
   const maxBonusUnitario = (state.configuracoes && state.configuracoes.max_bonus_value) || 150;
-  const valorMaximoPossivel = auditorias.length * maxBonusUnitario;
-  const valorDescontado = Math.max(0, valorMaximoPossivel - totalBonif);
+  // Integral é um valor único fixo por período (não multiplica pelo nº de auditorias).
+  // O Acumulado é calculado sobre a nota MÉDIA do período (a "ronda"), como uma única
+  // avaliação — os descontos das não conformidades ao longo do mês vão reduzindo essa média.
+  const houveDesclassificacao = auditorias.some(a=>a.status==='DESCLASSIFICADO');
+  const valorIntegral = maxBonusUnitario;
+  const valorAcumulado = houveDesclassificacao ? 0 : calcularBonus(notaMedia);
+  const valorDescontado = Math.max(0, valorIntegral - valorAcumulado);
 
   const ncsFiltradas = state.ncs.filter(nc => auditoriaIds.has(nc.auditoria_id));
   const ncsPendentes = ncsFiltradas.filter(nc=>nc.status==='PENDENTE').length;
@@ -651,9 +656,9 @@ function DashboardScreen(){
 
     <h3 class="font-display font-bold text-white text-sm uppercase tracking-wider pt-1">Remuneração Variável</h3>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Integral</div><div class="text-3xl font-display font-black text-white mt-2">${fmtMoney(valorMaximoPossivel)}</div><div class="text-xs text-slate-300 mt-1">Ref. a ${auditorias.length} auditoria(s)</div>`)}
-      ${Card(`<div class="text-xs font-bold text-indigo-300 uppercase tracking-wider">Acumulado</div><div class="text-3xl font-display font-black text-indigo-400 mt-2">${fmtMoney(totalBonif)}</div><div class="text-xs text-slate-300 mt-1">Já garantido no período</div>`, 'bg-indigo-950/10 border-indigo-900/20')}
-      ${Card(`<div class="text-xs font-bold text-rose-400 uppercase tracking-wider">Descontos</div><div class="text-3xl font-display font-black text-rose-400 mt-2">${fmtMoney(valorDescontado)}</div><div class="text-xs text-slate-300 mt-1">Perdido em relação ao integral</div>`, 'bg-rose-950/10 border-rose-900/20')}
+      ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Integral</div><div class="text-3xl font-display font-black text-white mt-2">${fmtMoney(valorIntegral)}</div><div class="text-xs text-slate-300 mt-1">Valor máximo do período</div>`)}
+      ${Card(`<div class="text-xs font-bold text-indigo-300 uppercase tracking-wider">Acumulado</div><div class="text-3xl font-display font-black text-indigo-400 mt-2">${fmtMoney(valorAcumulado)}</div><div class="text-xs text-slate-300 mt-1">Com base na nota média (${fmtPct(notaMedia)})</div>`, 'bg-indigo-950/10 border-indigo-900/20')}
+      ${Card(`<div class="text-xs font-bold text-rose-400 uppercase tracking-wider">Descontos</div><div class="text-3xl font-display font-black text-rose-400 mt-2">${fmtMoney(valorDescontado)}</div><div class="text-xs text-slate-300 mt-1">${houveDesclassificacao ? 'Desclassificado no período' : 'Perdido em relação ao integral'}</div>`, 'bg-rose-950/10 border-rose-900/20')}
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
