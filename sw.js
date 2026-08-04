@@ -1,7 +1,7 @@
-// Service Worker mínimo — necessário para o navegador permitir "Instalar como aplicativo".
-// Faz cache do shell do app para abrir mais rápido e funcionar offline (exceto dados do Supabase,
-// que precisam de internet).
-const CACHE_NAME = 'auditoria-br3r-v1';
+// Service Worker — necessário para "Instalar como aplicativo".
+// Estratégia: SEMPRE busca a versão mais nova na rede primeiro. Só usa o cache
+// guardado se estiver sem internet. Isso evita ficar preso numa versão antiga.
+const CACHE_NAME = 'auditoria-br3r-v2';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -21,16 +21,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
   // Nunca cacheia chamadas ao Supabase — sempre busca dados atualizados na rede.
   if (event.request.url.includes('supabase.co')) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
         return response;
-      }).catch(() => cached);
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
