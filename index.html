@@ -640,15 +640,20 @@ function DashboardScreen(){
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5 fade-in">
     ${FilterPanel()}
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       ${Card(`
         <div class="flex items-center justify-between mb-1"><span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Pontuação Geral (Média)</span><span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${statusGeral.cls}">${statusGeral.label}</span></div>
         <div class="text-4xl font-display font-black text-white mt-2">${fmtPct(notaMedia)} <span class="text-sm font-medium text-slate-300">meta ${meta}%</span></div>
         <div class="w-full h-2 bg-slate-800 rounded-full mt-3 overflow-hidden"><div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full" style="width:${Math.min(100,notaMedia)}%"></div></div>
-      `, 'col-span-2')}
-      ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Bonificação Gerada</div><div class="text-3xl font-display font-black text-indigo-400 mt-2">${fmtMoney(totalBonif)}</div><div class="text-xs text-slate-300 mt-1">Ref. a ${auditorias.length} auditoria(s)</div>`)}
-      ${Card(`<div class="text-xs font-bold text-rose-400 uppercase tracking-wider">Bonificação Descontada</div><div class="text-3xl font-display font-black text-rose-400 mt-2">${fmtMoney(valorDescontado)}</div><div class="text-xs text-slate-300 mt-1">De ${fmtMoney(valorMaximoPossivel)} possíveis</div>`, 'bg-rose-950/10 border-rose-900/20')}
+      `, 'sm:col-span-2')}
       ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Não Conformidades</div><div class="text-3xl font-display font-black text-amber-400 mt-2">${ncsFiltradas.length}</div><div class="text-xs text-slate-300 mt-1">${ncsPendentes} pendente(s)</div>`)}
+    </div>
+
+    <h3 class="font-display font-bold text-white text-sm uppercase tracking-wider pt-1">Remuneração Variável</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Integral</div><div class="text-3xl font-display font-black text-white mt-2">${fmtMoney(valorMaximoPossivel)}</div><div class="text-xs text-slate-300 mt-1">Ref. a ${auditorias.length} auditoria(s)</div>`)}
+      ${Card(`<div class="text-xs font-bold text-indigo-300 uppercase tracking-wider">Acumulado</div><div class="text-3xl font-display font-black text-indigo-400 mt-2">${fmtMoney(totalBonif)}</div><div class="text-xs text-slate-300 mt-1">Já garantido no período</div>`, 'bg-indigo-950/10 border-indigo-900/20')}
+      ${Card(`<div class="text-xs font-bold text-rose-400 uppercase tracking-wider">Descontos</div><div class="text-3xl font-display font-black text-rose-400 mt-2">${fmtMoney(valorDescontado)}</div><div class="text-xs text-slate-300 mt-1">Perdido em relação ao integral</div>`, 'bg-rose-950/10 border-rose-900/20')}
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -897,7 +902,7 @@ function NovaAuditoriaScreen(){
                 <div class="flex flex-wrap items-center gap-2">
                   ${(it.fotos||[]).map((foto,fi)=>`
                     <div class="relative h-14 w-14 rounded-lg overflow-hidden border border-slate-700 group">
-                      <img src="${foto}" class="h-full w-full object-cover">
+                      <img src="${foto}" onclick="abrirFoto('${foto}')" class="h-full w-full object-cover cursor-pointer">
                       <button onclick="removerFoto(${it.idx},${fi})" class="absolute inset-0 bg-rose-600/80 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity">✕</button>
                     </div>`).join('')}
                   <button onclick="abrirCamera(${it.idx})" class="h-14 w-14 rounded-lg border border-dashed border-slate-700 text-slate-300 hover:border-rose-500 hover:text-rose-400 flex flex-col items-center justify-center text-[10px] font-bold gap-0.5 transition-colors">
@@ -1117,7 +1122,7 @@ function PlanosAcaoScreen(){
         </div>
         <div class="text-xs text-slate-300 font-bold uppercase tracking-wider mb-1">Categoria: ${nc.categoria}</div>
         <p class="text-white font-semibold mb-4">${nc.descricao}</p>
-        ${nc.fotos && nc.fotos.length ? `<div class="flex flex-wrap gap-2 mb-4">${nc.fotos.map(f=>`<a href="${f}" target="_blank"><img src="${f}" class="h-16 w-16 rounded-lg object-cover border border-slate-700 hover:opacity-80"></a>`).join('')}</div>` : ''}
+        ${nc.fotos && nc.fotos.length ? `<div class="flex flex-wrap gap-2 mb-4">${nc.fotos.map(f=>`<img src="${f}" onclick="abrirFoto('${f}')" class="h-16 w-16 rounded-lg object-cover border border-slate-700 hover:opacity-80 cursor-pointer">`).join('')}</div>` : ''}
 
         ${plano ? `
           <div class="border-t border-slate-800 pt-3 space-y-1.5">
@@ -1254,7 +1259,7 @@ function WhatsAppNCModal(){
         ${nc.fotos && nc.fotos.length ? `
           <div><h4 class="text-sm font-bold text-white mb-2">Fotos (${nc.fotos.length})</h4>
             <div class="grid grid-cols-3 gap-2">
-              ${nc.fotos.map((f,i)=>`<div class="space-y-1"><img src="${f}" class="w-full aspect-video object-cover rounded-lg border border-slate-700"><a href="${f}" download="NC_${nc.codigo}_Foto${i+1}.jpg" class="block text-center text-[10px] py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-md font-bold">Baixar</a></div>`).join('')}
+              ${nc.fotos.map((f,i)=>`<div class="space-y-1"><img src="${f}" onclick="abrirFoto('${f}')" class="w-full aspect-video object-cover rounded-lg border border-slate-700 cursor-pointer hover:opacity-80"><a href="${f}" download="NC_${nc.codigo}_Foto${i+1}.jpg" class="block text-center text-[10px] py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-md font-bold">Baixar</a></div>`).join('')}
             </div>
           </div>` : ''}
       </div>
@@ -1266,7 +1271,7 @@ function WhatsAppNCModal(){
 }
 function enviarWhatsAppNC(){
   const nc = state.ncs.find(n=>n.id===state._waNcId);
-  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(montarMensagemNC(nc))}`, '_blank');
+  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(montarMensagemNC(nc))}`, 'br3r_whatsapp');
 }
 async function copiarTextoWhatsAppNC(){
   const nc = state.ncs.find(n=>n.id===state._waNcId);
@@ -1443,7 +1448,7 @@ function WhatsAppModal(){
           ${fotos.length ? `<div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
             ${fotos.map((item,i)=>`
               <div class="space-y-1">
-                <img src="${item.f}" class="w-full aspect-video object-cover rounded-lg border border-slate-700">
+                <img src="${item.f}" onclick="abrirFoto('${item.f}')" class="w-full aspect-video object-cover rounded-lg border border-slate-700 cursor-pointer hover:opacity-80">
                 <a href="${item.f}" download="Auditoria_${a.id.slice(0,8)}_Foto${i+1}.jpg" class="block text-center text-[10px] py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-md font-bold">Baixar</a>
               </div>`).join('')}
           </div>` : `<p class="text-xs text-slate-300">Nenhuma foto registrada nesta auditoria.</p>`}
@@ -1458,7 +1463,7 @@ function WhatsAppModal(){
 function enviarWhatsApp(){
   const a = state.auditorias.find(a=>a.id===state._waAuditId);
   const msg = montarMensagemWhatsApp(a);
-  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, 'br3r_whatsapp');
 }
 async function copiarTextoWhatsApp(){
   const a = state.auditorias.find(a=>a.id===state._waAuditId);
@@ -1573,6 +1578,22 @@ async function adicionarConferente(){
 /* ============================================================
    ROTEAMENTO / RENDER
    ============================================================ */
+/* ============================================================
+   VISUALIZAR FOTO EM TELA CHEIA (útil em reuniões)
+   ============================================================ */
+function abrirFoto(url){ state._lightbox = url; render(); }
+function fecharFoto(){ state._lightbox = null; render(); }
+function LightboxModal(){
+  const url = state._lightbox;
+  if(!url) return '';
+  return `
+  <div onclick="fecharFoto()" class="fixed inset-0 z-[90] bg-black/95 flex items-center justify-center p-4 fade-in">
+    <button onclick="fecharFoto()" class="absolute top-4 right-4 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xl z-10">✕</button>
+    <a href="${url}" download="evidencia.jpg" onclick="event.stopPropagation()" class="absolute top-4 left-4 h-11 px-4 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-sm font-bold gap-2 z-10">⬇ Baixar</a>
+    <img src="${url}" onclick="event.stopPropagation()" class="max-w-full max-h-full object-contain rounded-lg">
+  </div>`;
+}
+
 function toggleMenu(){ state._menuOpen = !state._menuOpen; render(); }
 function navigate(route){ state.route = route; state._menuOpen = false; render(); }
 function toggleTheme(){
@@ -1621,7 +1642,7 @@ function render(){
       'configuracoes': ConfiguracoesScreen,
     }[state.route]?.() || DashboardScreen();
   }
-  root.innerHTML = `${Sidebar()}<div class="lg:pl-64">${Header()}${body}</div>`;
+  root.innerHTML = `${Sidebar()}<div class="lg:pl-64">${Header()}${body}</div>${LightboxModal()}`;
   if(state.route === 'dashboard' && !state.loading) setTimeout(renderDashboardCharts, 0);
 }
 
