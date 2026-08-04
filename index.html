@@ -343,6 +343,10 @@ async function atualizarStatusNC(ncId, status){
   await sb.from('nao_conformidades').update({status}).eq('id', ncId);
   await loadAll();
 }
+async function atualizarCriticidadeNC(ncId, criticidade){
+  await sb.from('nao_conformidades').update({criticidade}).eq('id', ncId);
+  await loadAll();
+}
 async function criarPlano(ncId, payload){
   await sb.from('planos_acao').insert({ nc_id: ncId, ...payload });
   await sb.from('nao_conformidades').update({status:'EM_ANDAMENTO'}).eq('id', ncId);
@@ -1097,7 +1101,9 @@ function PlanosAcaoScreen(){
           ${statusBadge(nc.status)}
         </div>
         <div class="flex flex-wrap gap-2 mb-3">
-          ${criticidadeBadge(nc.criticidade)}
+          <select onchange="atualizarCriticidadeNC('${nc.id}', this.value)" class="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer ${nc.criticidade==='ALTA'?'bg-rose-500/15 text-rose-400 border-rose-500/30':nc.criticidade==='MEDIA'?'bg-amber-500/15 text-amber-400 border-amber-500/30':'bg-slate-700 text-slate-300 border-slate-700'}">
+            ${['BAIXA','MEDIA','ALTA'].map(c=>`<option value="${c}" ${nc.criticidade===c?'selected':''}>CRITICIDADE ${c}</option>`).join('')}
+          </select>
           <span class="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">LOCAL: ${nc.local.toUpperCase()}</span>
         </div>
         <div class="text-xs text-slate-300 font-bold uppercase tracking-wider mb-1">Categoria: ${nc.categoria}</div>
