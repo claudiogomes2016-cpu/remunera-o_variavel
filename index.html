@@ -584,6 +584,9 @@ function DashboardScreen(){
   const auditoriaIds = new Set(auditorias.map(a=>a.id));
   const bonifFiltradas = state.bonificacoes.filter(b => auditoriaIds.has(b.auditoria_id));
   const totalBonif = bonifFiltradas.reduce((s,b)=>s+Number(b.valor||0),0);
+  const maxBonusUnitario = (state.configuracoes && state.configuracoes.max_bonus_value) || 150;
+  const valorMaximoPossivel = auditorias.length * maxBonusUnitario;
+  const valorDescontado = Math.max(0, valorMaximoPossivel - totalBonif);
 
   const ncsFiltradas = state.ncs.filter(nc => auditoriaIds.has(nc.auditoria_id));
   const ncsPendentes = ncsFiltradas.filter(nc=>nc.status==='PENDENTE').length;
@@ -644,6 +647,7 @@ function DashboardScreen(){
         <div class="w-full h-2 bg-slate-800 rounded-full mt-3 overflow-hidden"><div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full" style="width:${Math.min(100,notaMedia)}%"></div></div>
       `, 'col-span-2')}
       ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Bonificação Gerada</div><div class="text-3xl font-display font-black text-indigo-400 mt-2">${fmtMoney(totalBonif)}</div><div class="text-xs text-slate-300 mt-1">Ref. a ${auditorias.length} auditoria(s)</div>`)}
+      ${Card(`<div class="text-xs font-bold text-rose-400 uppercase tracking-wider">Bonificação Descontada</div><div class="text-3xl font-display font-black text-rose-400 mt-2">${fmtMoney(valorDescontado)}</div><div class="text-xs text-slate-300 mt-1">De ${fmtMoney(valorMaximoPossivel)} possíveis</div>`, 'bg-rose-950/10 border-rose-900/20')}
       ${Card(`<div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Não Conformidades</div><div class="text-3xl font-display font-black text-amber-400 mt-2">${ncsFiltradas.length}</div><div class="text-xs text-slate-300 mt-1">${ncsPendentes} pendente(s)</div>`)}
     </div>
 
@@ -881,15 +885,15 @@ function NovaAuditoriaScreen(){
                 <button onclick="setItemConforme(${it.idx}, false)" class="px-3 py-1.5 text-xs font-bold ${!it.conforme ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-300'}">NÃO CONFORME</button>
               </div>
             </div>
-            ${!it.conforme ? `
-              <div class="mt-2.5 pt-2.5 border-t border-slate-800 space-y-2">
-                ${!it.regraCritica ? `
-                  <div>
-                    <label class="text-xs text-slate-300 block mb-1">Criticidade do desvio</label>
-                    <select onchange="setItemCriticidade(${it.idx}, this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-                      ${['BAIXA','MEDIA','ALTA'].map(c=>`<option ${it.criticidade===c?'selected':''}>${c}</option>`).join('')}
-                    </select>
-                  </div>` : `<div class="text-xs text-amber-400 font-bold">⚠️ Violação de regra de ouro — turno será DESCLASSIFICADO</div>`}
+            <div class="mt-2.5 pt-2.5 border-t border-slate-800 space-y-2">
+              <div>
+                <label class="text-xs text-slate-300 block mb-1">Criticidade${it.regraCritica ? ' (regra de ouro)' : ''}</label>
+                <select onchange="setItemCriticidade(${it.idx}, this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                  ${['BAIXA','MEDIA','ALTA'].map(c=>`<option ${it.criticidade===c?'selected':''}>${c}</option>`).join('')}
+                </select>
+              </div>
+              ${!it.conforme && it.regraCritica ? `<div class="text-xs text-amber-400 font-bold">⚠️ Violação de regra de ouro — turno será DESCLASSIFICADO</div>` : ''}
+              ${!it.conforme ? `
                 <div class="flex flex-wrap items-center gap-2">
                   ${(it.fotos||[]).map((foto,fi)=>`
                     <div class="relative h-14 w-14 rounded-lg overflow-hidden border border-slate-700 group">
@@ -899,8 +903,8 @@ function NovaAuditoriaScreen(){
                   <button onclick="abrirCamera(${it.idx})" class="h-14 w-14 rounded-lg border border-dashed border-slate-700 text-slate-300 hover:border-rose-500 hover:text-rose-400 flex flex-col items-center justify-center text-[10px] font-bold gap-0.5 transition-colors">
                     📷<span>Foto</span>
                   </button>
-                </div>
-              </div>` : ''}
+                </div>` : ''}
+            </div>
           </div>`).join('')}
       </div>
     `)).join('')}
