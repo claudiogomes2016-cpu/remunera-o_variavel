@@ -1098,7 +1098,12 @@ function PlanosAcaoScreen(){
       return Card(`
         <div class="flex items-start justify-between gap-3 mb-3">
           <span class="text-xs text-slate-300 font-mono">${nc.codigo}</span>
-          ${statusBadge(nc.status)}
+          <div class="flex items-center gap-1.5">
+            ${statusBadge(nc.status)}
+            <button onclick="abrirWhatsAppNC('${nc.id}')" title="Enviar para WhatsApp" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/></svg></button>
+            <button onclick="abrirEdicaoNC('${nc.id}')" title="Editar" class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+            <button onclick="excluirNC('${nc.id}')" title="Excluir" class="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></button>
+          </div>
         </div>
         <div class="flex flex-wrap gap-2 mb-3">
           <select onchange="atualizarCriticidadeNC('${nc.id}', this.value)" class="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer ${nc.criticidade==='ALTA'?'bg-rose-500/15 text-rose-400 border-rose-500/30':nc.criticidade==='MEDIA'?'bg-amber-500/15 text-amber-400 border-amber-500/30':'bg-slate-700 text-slate-300 border-slate-700'}">
@@ -1127,10 +1132,142 @@ function PlanosAcaoScreen(){
         `}
       `);
     }).join('')}
-  </div>`;
+  </div>
+  ${EditarNCModal()}
+  ${WhatsAppNCModal()}`;
 }
 function setNcFilter(key,val){ state._ncFilter[key]=val; render(); }
 function abrirFormPlano(ncId){ state._planoFormFor = ncId; render(); }
+
+/* ============================================================
+   EXCLUIR / EDITAR NÃO CONFORMIDADE
+   ============================================================ */
+async function excluirNC(ncId){
+  if(!confirm('Tem certeza que deseja excluir esta não conformidade e o plano de ação ligado a ela?')) return;
+  await sb.from('planos_acao').delete().eq('nc_id', ncId);
+  await sb.from('nao_conformidades').delete().eq('id', ncId);
+  await loadAll();
+}
+function abrirEdicaoNC(ncId){
+  const nc = state.ncs.find(n=>n.id===ncId);
+  if(!nc) return;
+  const plano = state.planos.find(p=>p.nc_id===ncId);
+  state._editNC = {
+    id: nc.id, descricao: nc.descricao, local: nc.local, categoria: nc.categoria, criticidade: nc.criticidade, status: nc.status,
+    planoId: plano?.id || null, responsavel: plano?.responsavel || '', prazo: plano?.prazo || '', descricao_acao: plano?.descricao_acao || ''
+  };
+  render();
+}
+function fecharEdicaoNC(){ state._editNC = null; render(); }
+function updateEditNC(key, val){ state._editNC[key] = val; render(); }
+async function salvarEdicaoNC(){
+  const e = state._editNC;
+  await sb.from('nao_conformidades').update({ descricao: e.descricao, local: e.local, categoria: e.categoria, criticidade: e.criticidade, status: e.status }).eq('id', e.id);
+  if(e.planoId){
+    await sb.from('planos_acao').update({ responsavel: e.responsavel, prazo: e.prazo || null, descricao_acao: e.descricao_acao }).eq('id', e.planoId);
+  } else if(e.responsavel || e.prazo || e.descricao_acao){
+    await sb.from('planos_acao').insert({ nc_id: e.id, responsavel: e.responsavel, prazo: e.prazo || null, descricao_acao: e.descricao_acao, status: 'PENDENTE' });
+  }
+  state._editNC = null;
+  await loadAll();
+}
+function EditarNCModal(){
+  const e = state._editNC;
+  if(!e) return '';
+  return `
+  <div class="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto fade-in">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl my-auto">
+      <h3 class="font-display font-bold text-white text-lg">Editar Não Conformidade</h3>
+      <div class="space-y-3">
+        <div><label class="text-xs text-slate-300 block mb-1">Descrição</label><textarea rows="2" onchange="updateEditNC('descricao', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${e.descricao}</textarea></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Local</label><select onchange="updateEditNC('local', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${AREAS.map(a=>`<option ${e.local===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Categoria</label><select onchange="updateEditNC('categoria', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${CATEGORIAS.map(c=>`<option ${e.categoria===c.nome?'selected':''}>${c.nome}</option>`).join('')}<option ${e.categoria==='Regra Eliminatória'?'selected':''}>Regra Eliminatória</option></select></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Criticidade</label><select onchange="updateEditNC('criticidade', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${['BAIXA','MEDIA','ALTA'].map(c=>`<option ${e.criticidade===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div><label class="text-xs text-slate-300 block mb-1">Status</label><select onchange="updateEditNC('status', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${['PENDENTE','EM_ANDAMENTO','CONCLUIDO'].map(s=>`<option value="${s}" ${e.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}</select></div>
+        <div class="border-t border-slate-800 pt-3 space-y-3">
+          <div class="text-xs font-bold text-slate-300 uppercase">Plano de Ação</div>
+          <div><label class="text-xs text-slate-300 block mb-1">Responsável</label><input type="text" value="${e.responsavel}" onchange="updateEditNC('responsavel', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"></div>
+          <div><label class="text-xs text-slate-300 block mb-1">Prazo</label><input type="date" value="${e.prazo}" onchange="updateEditNC('prazo', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"></div>
+          <div><label class="text-xs text-slate-300 block mb-1">Ação corretiva</label><textarea rows="2" onchange="updateEditNC('descricao_acao', this.value)" class="w-full bg-slate-850 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">${e.descricao_acao}</textarea></div>
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="fecharEdicaoNC()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold">Cancelar</button>
+        <button onclick="salvarEdicaoNC()" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   EXPORTAR NÃO CONFORMIDADE PARA WHATSAPP
+   ============================================================ */
+function abrirWhatsAppNC(ncId){ state._waNcId = ncId; render(); }
+function fecharWhatsAppNC(){ state._waNcId = null; render(); }
+function montarMensagemNC(nc){
+  const a = state.auditorias.find(a=>a.id===nc.auditoria_id);
+  const c = a && state.conferentes.find(c=>c.id===a.conferente_id);
+  const plano = state.planos.find(p=>p.nc_id===nc.id);
+  let msg = `⚠️ *NÃO CONFORMIDADE - BALL BR3R / SODEXO*\n`;
+  msg += `────────────────────────────\n`;
+  msg += `🆔 *Código:* ${nc.codigo}\n`;
+  if(a) msg += `📅 *Data:* ${fmtDate(a.data)}   ⏱️ *Turno:* ${a.turno}\n`;
+  if(c) msg += `👷 *Conferente:* ${c.nome}\n`;
+  msg += `📍 *Local:* ${nc.local}\n`;
+  msg += `🏷️ *Categoria:* ${nc.categoria}\n`;
+  msg += `🚨 *Criticidade:* ${nc.criticidade}\n`;
+  msg += `📝 *Descrição:* ${nc.descricao}\n`;
+  msg += `📌 *Status:* ${nc.status}\n`;
+  if(plano){
+    msg += `────────────────────────────\n`;
+    msg += `✅ *PLANO DE AÇÃO*\n`;
+    msg += `👤 *Responsável:* ${plano.responsavel||'A definir'}\n`;
+    msg += `⏳ *Prazo:* ${plano.prazo?fmtDate(plano.prazo):'A definir'}\n`;
+    if(plano.descricao_acao) msg += `🔧 *Ação:* ${plano.descricao_acao}\n`;
+  }
+  if(nc.fotos && nc.fotos.length) msg += `📸 *Fotos:* ${nc.fotos.length} imagem(ns) — baixe abaixo para anexar\n`;
+  return msg;
+}
+function WhatsAppNCModal(){
+  const id = state._waNcId;
+  if(!id) return '';
+  const nc = state.ncs.find(n=>n.id===id);
+  if(!nc) return '';
+  const msg = montarMensagemNC(nc);
+  return `
+  <div class="fixed inset-0 z-[75] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto fade-in">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-lg my-auto shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="bg-emerald-600 px-6 py-4 text-white flex items-center justify-between shrink-0">
+        <div><h3 class="text-lg font-black">Enviar Não Conformidade</h3><p class="text-xs text-emerald-100">${nc.codigo}</p></div>
+        <button onclick="fecharWhatsAppNC()" class="p-2 bg-white/10 hover:bg-white/20 rounded-full">✕</button>
+      </div>
+      <div class="p-5 space-y-4 overflow-y-auto flex-1">
+        <div class="flex gap-2">
+          <button onclick="enviarWhatsAppNC()" class="flex-1 py-3 px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2">📱 Abrir WhatsApp</button>
+          <button onclick="copiarTextoWhatsAppNC()" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl">📋 Copiar</button>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-200 whitespace-pre-wrap max-h-56 overflow-y-auto">${msg}</div>
+        ${nc.fotos && nc.fotos.length ? `
+          <div><h4 class="text-sm font-bold text-white mb-2">Fotos (${nc.fotos.length})</h4>
+            <div class="grid grid-cols-3 gap-2">
+              ${nc.fotos.map((f,i)=>`<div class="space-y-1"><img src="${f}" class="w-full aspect-video object-cover rounded-lg border border-slate-700"><a href="${f}" download="NC_${nc.codigo}_Foto${i+1}.jpg" class="block text-center text-[10px] py-1 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-md font-bold">Baixar</a></div>`).join('')}
+            </div>
+          </div>` : ''}
+      </div>
+      <div class="bg-slate-850 px-6 py-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button onclick="fecharWhatsAppNC()" class="py-2 px-5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+function enviarWhatsAppNC(){
+  const nc = state.ncs.find(n=>n.id===state._waNcId);
+  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(montarMensagemNC(nc))}`, '_blank');
+}
+async function copiarTextoWhatsAppNC(){
+  const nc = state.ncs.find(n=>n.id===state._waNcId);
+  try{ await navigator.clipboard.writeText(montarMensagemNC(nc)); alert('Texto copiado!'); }catch(e){ alert('Não foi possível copiar automaticamente.'); }
+}
 function PlanoForm(ncId){
   return `
   <div class="mt-3 pt-3 border-t border-slate-800 space-y-2.5">
@@ -1497,7 +1634,15 @@ async function init(){
   });
   window.addEventListener('appinstalled', () => { state._canInstall = false; render(); });
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      reg.update(); // checa por versão nova sempre que o app abre
+      reg.addEventListener('updatefound', () => {
+        const novo = reg.installing;
+        novo?.addEventListener('statechange', () => {
+          if(novo.state === 'activated'){ window.location.reload(); }
+        });
+      });
+    }).catch(()=>{});
   }
   if(sb){
     const { data } = await sb.auth.getSession();
